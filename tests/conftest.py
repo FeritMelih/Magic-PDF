@@ -5,6 +5,15 @@ import pytest
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas as pdf_canvas
 
+from magic_pdf.tools.convert import _find_libreoffice
+
+HAS_LIBREOFFICE = _find_libreoffice() is not None
+
+requires_libreoffice = pytest.mark.skipif(
+    not HAS_LIBREOFFICE,
+    reason="LibreOffice is not installed",
+)
+
 
 @pytest.fixture
 def sample_pdf(tmp_path):

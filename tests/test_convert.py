@@ -1,8 +1,11 @@
 """Tests for format conversion tools."""
 
 import os
+from unittest.mock import patch
+
 import pytest
 from magic_pdf.tools.convert import (
+    _find_libreoffice,
     docx_to_pdf,
     image_to_pdf,
     html_to_pdf,
@@ -11,6 +14,12 @@ from magic_pdf.tools.convert import (
     pdf_to_image,
 )
 from magic_pdf.tools.create import get_pdf_info
+from magic_pdf.tools.convert import _find_libreoffice as _find_lo
+
+requires_libreoffice = pytest.mark.skipif(
+    _find_lo() is None,
+    reason="LibreOffice is not installed",
+)
 
 
 class TestImageToPdf:
@@ -129,3 +138,57 @@ class TestPdfToImage:
         os.makedirs(output_dir)
         with pytest.raises(ValueError):
             pdf_to_image(sample_pdf, output_dir, pages="99")
+
+
+@pytest.mark.libreoffice
+@requires_libreoffice
+class TestLibreOfficeConversion:
+    """Tests that verify the LibreOffice conversion path."""
+
+    def test_find_libreoffice_returns_path(self):
+        path = _find_libreoffice()
+        assert path is not None
+        assert os.path.isfile(path)
+
+    def test_docx_uses_libreoffice(self, sample_docx, tmp_path):
+        output = str(tmp_path / "lo_docx.pdf")
+        result = docx_to_pdf(sample_docx, output)
+        assert "LibreOffice" in result
+        assert os.path.isfile(output)
+
+    def test_excel_uses_libreoffice(self, sample_xlsx, tmp_path):
+        output = str(tmp_path / "lo_excel.pdf")
+        result = excel_to_pdf(sample_xlsx, output)
+        assert "LibreOffice" in result
+        assert os.path.isfile(output)
+
+    def test_pptx_uses_libreoffice(self, sample_pptx, tmp_path):
+        output = str(tmp_path / "lo_pptx.pdf")
+        result = powerpoint_to_pdf(sample_pptx, output)
+        assert "LibreOffice" in result
+        assert os.path.isfile(output)
+
+
+class TestFallbackConversion:
+    """Tests that verify the pure-Python fallback path (LibreOffice patched out)."""
+
+    def test_docx_fallback(self, sample_docx, tmp_path):
+        output = str(tmp_path / "fb_docx.pdf")
+        with patch("magic_pdf.tools.convert._find_libreoffice", return_value=None):
+            result = docx_to_pdf(sample_docx, output)
+        assert "fallback" in result
+        assert os.path.isfile(output)
+
+    def test_excel_fallback(self, sample_xlsx, tmp_path):
+        output = str(tmp_path / "fb_excel.pdf")
+        with patch("magic_pdf.tools.convert._find_libreoffice", return_value=None):
+            result = excel_to_pdf(sample_xlsx, output)
+        assert "fallback" in result
+        assert os.path.isfile(output)
+
+    def test_pptx_fallback(self, sample_pptx, tmp_path):
+        output = str(tmp_path / "fb_pptx.pdf")
+        with patch("magic_pdf.tools.convert._find_libreoffice", return_value=None):
+            result = powerpoint_to_pdf(sample_pptx, output)
+        assert "fallback" in result
+        assert os.path.isfile(output)

@@ -25,6 +25,27 @@ An open-source MCP (Model Context Protocol) server for comprehensive PDF operati
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 - **Optional:** [LibreOffice](https://www.libreoffice.org/) for high-fidelity Office document conversion (DOCX, Excel, PowerPoint). Without it, the server falls back to pure Python libraries with reduced formatting fidelity.
 
+### Installing LibreOffice
+
+LibreOffice is optional but recommended for best results when converting DOCX, Excel, and PowerPoint files to PDF.
+
+**Windows:**
+```bash
+winget install --id TheDocumentFoundation.LibreOffice
+```
+
+**macOS:**
+```bash
+brew install --cask libreoffice
+```
+
+**Linux (Debian/Ubuntu):**
+```bash
+sudo apt install libreoffice
+```
+
+The server auto-detects LibreOffice at startup — no additional configuration is needed. It searches `PATH` for `libreoffice`/`soffice` and checks common install locations on Windows.
+
 ## Installation
 
 ```bash
@@ -120,7 +141,6 @@ magic-pdf/
 │           └── utils.py        # Shared utilities & validation
 ├── tests/
 ├── pyproject.toml
-├── requirements.md
 ├── README.md
 └── LICENSE
 ```

@@ -28,5 +28,10 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.pytest.ini_options]
+markers = [
+    "libreoffice: tests requiring LibreOffice to be installed",
+]
+
 [project.scripts]
 magic-pdf = "magic_pdf.server:main"

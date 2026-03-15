@@ -27,3 +27,6 @@ Thumbs.db
 
 # MCP config (local/user-specific)
 .mcp.json
+
+# Private files (not for public repo)
+private/
