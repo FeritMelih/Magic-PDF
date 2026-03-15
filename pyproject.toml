@@ -1,0 +1,32 @@
+[project]
+name = "magic-pdf"
+version = "0.1.0"
+description = "MCP server for comprehensive PDF manipulation"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "pypdf>=4.0.0",
+    "reportlab>=4.0.0",
+    "Pillow>=10.0.0",
+    "python-docx>=1.0.0",
+    "openpyxl>=3.1.0",
+    "python-pptx>=0.6.23",
+    "markdown>=3.5.0",
+    "xhtml2pdf>=0.2.13",
+    "PyMuPDF>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+magic-pdf = "magic_pdf.server:main"
