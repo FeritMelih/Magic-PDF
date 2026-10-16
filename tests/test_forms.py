@@ -45,3 +45,32 @@ class TestFlattenForm:
         # Flattened PDF should still have pages
         info = get_pdf_info(output)
         assert info["page_count"] >= 1
+
+    def test_flatten_keeps_the_values_as_page_text(self, sample_form_pdf, tmp_path):
+        """CF-040: copying pages dropped the widgets, so every filled value was lost."""
+        import fitz
+
+        filled = str(tmp_path / "filled.pdf")
+        fill_form(sample_form_pdf, {"name": "John Doe", "email": "john@example.com"}, filled)
+        output = str(tmp_path / "flattened.pdf")
+        flatten_form(filled, output)
+        with fitz.open(output) as doc:
+            assert sum(1 for page in doc for _ in page.widgets()) == 0
+            text = doc[0].get_text()
+        assert "John Doe" in text and "john@example.com" in text
+
+
+class TestFormFit:
+    def test_a_value_wider_than_its_box_is_warned(self, sample_form_pdf, tmp_path):
+        """CF-040: a value clipped in Chrome and Drive looked whole in the MuPDF render, so Copilot
+        said it fit. fill_form now names it, measured at the field's own font."""
+        output = str(tmp_path / "filled.pdf")
+        result = fill_form(sample_form_pdf, {"name": "Asylum Applicant/Removal Proceedings " * 2,
+                                             "email": "john@example.com"}, output)
+        assert "WARNING: 1 field value(s)" in result and "name (needs" in result
+        assert "email" not in result.split("WARNING", 1)[1]
+
+    def test_values_that_fit_carry_no_warning(self, sample_form_pdf, tmp_path):
+        output = str(tmp_path / "filled.pdf")
+        result = fill_form(sample_form_pdf, {"name": "John Doe"}, output)
+        assert "WARNING" not in result

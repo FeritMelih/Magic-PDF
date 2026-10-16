@@ -112,3 +112,19 @@ class TestSeparatePages:
         output = str(tmp_path / "sep_bad.pdf")
         with pytest.raises(ValueError):
             separate_pages(sample_pdf, [10], output)
+
+
+class TestMergeKeepsForms:
+    def test_a_filled_form_stays_a_live_form(self, sample_form_pdf, sample_pdf, tmp_path):
+        """CF-040: add_page dropped /AcroForm, so a merged filled form fell back to its stored
+        appearance and clipped long values."""
+        import pypdf
+
+        from magic_pdf.tools.forms import fill_form
+
+        filled = str(tmp_path / "filled.pdf")
+        fill_form(sample_form_pdf, {"name": "John Doe"}, filled)
+        output = str(tmp_path / "merged.pdf")
+        merge_pdfs([filled, sample_pdf], output)
+        fields = pypdf.PdfReader(output).get_fields()
+        assert fields and fields["name"].get("/V") == "John Doe"

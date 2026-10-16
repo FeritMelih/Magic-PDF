@@ -94,7 +94,68 @@ def fill_form(
     with open(output_path, "wb") as f:
         writer.write(f)
 
-    return f"Filled {len(fields)} form field(s): {output_path}"
+    message = f"Filled {len(fields)} form field(s): {output_path}"
+    overflowing = overflowing_fields(output_path, names=fields)
+    if overflowing:
+        listed = "; ".join(
+            f"{item['name']} (needs {item['needed_pt']} pt, box {item['box_pt']} pt)"
+            for item in overflowing
+        )
+        message += (
+            f"\nWARNING: {len(overflowing)} field value(s) are wider than their box at the form's "
+            f"own font, so Chrome, Google Drive and Acrobat cut them off (a pdf_to_image render "
+            f"may still show them whole): {listed}. Shorten them, e.g. move the rest to an "
+            f"addendum page."
+        )
+    return message
+
+
+#: PDF base-14 font → PyMuPDF's short name, for measuring a value at the form's own font.
+_BASE14 = {
+    ("courier", False): "cour", ("courier", True): "cobo",
+    ("times", False): "tiro", ("times", True): "tibo",
+    ("helvetica", False): "helv", ("helvetica", True): "hebo",
+}
+
+
+def _measuring_font(font: str) -> str:
+    name = (font or "").lower()
+    family = ("courier" if "cour" in name or name.startswith("co")
+              else "times" if "times" in name or "tiro" in name or "roman" in name
+              else "helvetica")
+    bold = "bold" in name or name in ("cobo", "hebo", "tibo")
+    return _BASE14[(family, bold)]
+
+
+def overflowing_fields(file_path: str, names=None) -> list[dict]:
+    """The filled single-line text fields whose value is wider than their box at the field's own
+    font and size — the ones Chrome (PDFium), Drive and Acrobat clip. MuPDF, behind
+    ``pdf_to_image``, draws a field in its own narrower font, so a render is no check (CF-040).
+    ``names``: only these fields (a full name or its last part); auto-size (0), multi-line and
+    comb fields are skipped, since they fit themselves or wrap."""
+    wanted = {str(name) for name in names} if names is not None else None
+    found = []
+    with fitz.open(file_path) as doc:
+        for page in doc:
+            for widget in page.widgets():
+                if widget.field_type != fitz.PDF_WIDGET_TYPE_TEXT:
+                    continue
+                name = widget.field_name or ""
+                if wanted is not None and name not in wanted \
+                        and name.rsplit(".", 1)[-1] not in wanted:
+                    continue
+                value = str(widget.field_value or "")
+                size = widget.text_fontsize or 0
+                flags = widget.field_flags or 0
+                if not value or size <= 0 or flags & (1 << 12) or flags & (1 << 24):
+                    continue  # empty, auto-size, multi-line or comb
+                needed = fitz.get_text_length(value, fontname=_measuring_font(widget.text_font),
+                                              fontsize=size)
+                box = widget.rect.width - 4  # the 2 pt inset viewers keep on each side
+                if needed > box:
+                    found.append({"name": name, "page": page.number + 1,
+                                  "needed_pt": round(needed), "box_pt": round(box)})
+    return found
 
 
 def flatten_form(
@@ -114,20 +175,21 @@ def flatten_form(
         output_path = generate_output_path(file_path, "flattened")
     ensure_output_dir(output_path)
 
-    # Use PyMuPDF to flatten by rendering pages to a new document
+    # A form's values live in its widgets, and copying pages with show_pdf_page carried page
+    # content only, so every value was lost (CF-040). Instead each text field's appearance is drawn
+    # anew from its value, then the widgets are baked into the page: the values stay, as page text
+    # (searchable), drawn the same in every viewer. Every other field keeps the appearance the form
+    # gave it (PyMuPDF cannot redraw a USCIS drop-down: "bad choice field list").
     doc = fitz.open(file_path)
-    new_doc = fitz.open()
-
     for page in doc:
-        # Create new page with same dimensions
-        new_page = new_doc.new_page(
-            width=page.rect.width, height=page.rect.height
-        )
-        # Render original page (including form field values) into new page
-        new_page.show_pdf_page(page.rect, doc, page.number)
-
-    new_doc.save(output_path)
-    new_doc.close()
+        for widget in page.widgets():
+            if widget.field_type == fitz.PDF_WIDGET_TYPE_TEXT:
+                try:
+                    widget.update()
+                except Exception:  # noqa: BLE001 — baked with the appearance it has
+                    pass
+    doc.bake(annots=False, widgets=True)
+    doc.save(output_path, garbage=3, deflate=True)
     doc.close()
 
     return f"Form flattened: {output_path}"

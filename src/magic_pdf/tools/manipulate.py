@@ -28,11 +28,11 @@ def merge_pdfs(file_paths: list[str], output_path: str) -> str:
 
     ensure_output_dir(output_path)
 
+    # append, not add_page: add_page drops each file's /AcroForm, so a filled form fell back to the
+    # appearance its filler stored and clipped long values (CF-040); append keeps it a live form.
     writer = pypdf.PdfWriter()
     for fp in file_paths:
-        reader = pypdf.PdfReader(fp)
-        for page in reader.pages:
-            writer.add_page(page)
+        writer.append(pypdf.PdfReader(fp))
 
     with open(output_path, "wb") as f:
         writer.write(f)
