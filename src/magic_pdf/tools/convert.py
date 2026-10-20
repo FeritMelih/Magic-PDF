@@ -14,6 +14,7 @@ from .utils import (
     validate_extension,
     generate_output_path,
     ensure_output_dir,
+    reportlab_unicode_fonts,
     logger,
 )
 
@@ -182,12 +183,23 @@ def html_to_pdf(
     else:
         html_content = source
 
-    from xhtml2pdf import pisa
+    from xhtml2pdf import default as pisa_default, pisa
 
-    with open(output_path, "wb") as f:
-        result = pisa.CreatePDF(html_content, dest=f)
-        if result.err:
-            raise RuntimeError(f"HTML to PDF conversion failed with {result.err} errors")
+    # xhtml2pdf maps every family name (Helvetica, Arial, sans-serif, serif,
+    # Courier, monospace, ...) to a base-14 font, which has no Turkish or
+    # Cyrillic letters: point them at the Unicode TTFs for this conversion.
+    substitutes = reportlab_unicode_fonts()
+    base14_fonts = dict(pisa_default.DEFAULT_FONT)
+    pisa_default.DEFAULT_FONT.update(
+        {name: substitutes.get(font, font) for name, font in base14_fonts.items()}
+    )
+    try:
+        with open(output_path, "wb") as f:
+            result = pisa.CreatePDF(html_content, dest=f)
+            if result.err:
+                raise RuntimeError(f"HTML to PDF conversion failed with {result.err} errors")
+    finally:
+        pisa_default.DEFAULT_FONT.update(base14_fonts)
 
     return f"HTML converted to PDF: {output_path}"
 

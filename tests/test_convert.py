@@ -15,6 +15,9 @@ from magic_pdf.tools.convert import (
 )
 from magic_pdf.tools.create import get_pdf_info
 from magic_pdf.tools.convert import _find_libreoffice as _find_lo
+from magic_pdf.tools.utils import _UNICODE_FONT_CANDIDATES
+
+from .conftest import BASE14_FONTS, NO_UNICODE_FONTS, UNICODE_LINE, first_page_text_and_fonts
 
 requires_libreoffice = pytest.mark.skipif(
     _find_lo() is None,
@@ -71,6 +74,34 @@ class TestHtmlToPdf:
         html = "<p>Simple paragraph</p>"
         result = html_to_pdf(html, output)
         assert os.path.isfile(output)
+
+    @pytest.mark.parametrize(
+        "html",
+        [
+            "<p>{}</p>",
+            "<h1>{}</h1>",
+            '<p style="font-family: Arial, sans-serif"><i>{}</i></p>',
+            '<p style="font-family: \'Times New Roman\', serif">{}</p>',
+            "<pre>{}</pre>",
+            '<p style="font-family: monospace"><b>{}</b></p>',
+        ],
+        ids=["default", "bold-heading", "arial-italic", "serif", "pre", "monospace-bold"],
+    )
+    def test_turkish_and_cyrillic_read_back_as_written(self, tmp_path, html):
+        output = str(tmp_path / "unicode.pdf")
+        html_to_pdf(html.format(UNICODE_LINE), output)
+        text, drawn_in, file_types = first_page_text_and_fonts(output)
+        assert text.strip() == UNICODE_LINE
+        assert "ttf" in file_types and not drawn_in & BASE14_FONTS, (drawn_in, file_types)
+
+    def test_without_a_unicode_font_it_still_writes_in_helvetica(self, tmp_path, caplog):
+        output = str(tmp_path / "no_font.pdf")
+        with patch.dict(_UNICODE_FONT_CANDIDATES, NO_UNICODE_FONTS):
+            html_to_pdf("<p>Hello fallback</p>", output)
+        text, drawn_in, file_types = first_page_text_and_fonts(output)
+        assert text.strip() == "Hello fallback"
+        assert drawn_in == {"Helvetica"} and file_types == {"n/a"}
+        assert "No Unicode TrueType" in caplog.text
 
 
 class TestDocxToPdf:

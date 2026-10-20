@@ -13,12 +13,13 @@ from reportlab.platypus import (
     ListFlowable,
     ListItem,
 )
-from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 
 from .utils import (
     validate_pdf_file,
     validate_file_size,
     ensure_output_dir,
+    reportlab_unicode_fonts,
     logger,
 )
 
@@ -146,6 +147,11 @@ def create_pdf_from_text(
     )
 
     styles = getSampleStyleSheet()
+    # The stylesheet's base-14 fonts have no Turkish or Cyrillic letters.
+    substitutes = reportlab_unicode_fonts()
+    for style in styles.byName.values():
+        if isinstance(style, ParagraphStyle):
+            style.fontName = substitutes.get(style.fontName, style.fontName)
 
     # Convert markdown to HTML
     html = markdown.markdown(text, extensions=["extra", "sane_lists"])

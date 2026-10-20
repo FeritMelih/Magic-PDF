@@ -43,7 +43,11 @@ from .utils import (
     validate_file_size,
     generate_output_path,
     ensure_output_dir,
+    find_unicode_fonts,
 )
+
+# Base-14 fonts written with a Unicode TTF of the same family instead.
+_UNICODE_FAMILIES = {"helv": "sans", "tiro": "serif", "cour": "mono"}
 
 
 def add_header_footer(
@@ -85,6 +89,14 @@ def add_header_footer(
     }
     text_align = align_map.get(alignment.lower(), fitz.TEXT_ALIGN_CENTER)
 
+    # A base-14 font holds Latin-1 only: write with its Unicode TTF when one is
+    # found (Turkish, Cyrillic), else squeeze the text to Latin-1.
+    unicode_fonts = find_unicode_fonts()
+    family = _UNICODE_FAMILIES.get(font)
+    fontfile = unicode_fonts[family][0] if family in unicode_fonts else None
+    if fontfile:
+        font = f"MagicPdf{family.title()}"
+
     doc = fitz.open(file_path)
     total_pages = len(doc)
     today = datetime.now().strftime("%Y-%m-%d")
@@ -100,7 +112,9 @@ def add_header_footer(
             )
 
         if header:
-            header_text = _sanitize_for_latin1(_apply_placeholders(header))
+            header_text = _apply_placeholders(header)
+            if fontfile is None:
+                header_text = _sanitize_for_latin1(header_text)
             header_rect = fitz.Rect(
                 50, 20, rect.width - 50, 20 + font_size + 10
             )
@@ -108,12 +122,15 @@ def add_header_footer(
                 header_rect,
                 header_text,
                 fontname=font,
+                fontfile=fontfile,
                 fontsize=font_size,
                 align=text_align,
             )
 
         if footer:
-            footer_text = _sanitize_for_latin1(_apply_placeholders(footer))
+            footer_text = _apply_placeholders(footer)
+            if fontfile is None:
+                footer_text = _sanitize_for_latin1(footer_text)
             footer_rect = fitz.Rect(
                 50,
                 rect.height - 20 - font_size - 10,
@@ -124,6 +141,7 @@ def add_header_footer(
                 footer_rect,
                 footer_text,
                 fontname=font,
+                fontfile=fontfile,
                 fontsize=font_size,
                 align=text_align,
             )

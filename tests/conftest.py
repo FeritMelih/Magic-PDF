@@ -1,6 +1,7 @@
 """Shared test fixtures for Magic-PDF tests."""
 
 import os
+import fitz  # PyMuPDF
 import pytest
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas as pdf_canvas
@@ -13,6 +14,33 @@ requires_libreoffice = pytest.mark.skipif(
     not HAS_LIBREOFFICE,
     reason="LibreOffice is not installed",
 )
+
+# Turkish and Cyrillic letters outside Latin-1, which the PDF base-14 fonts can't draw.
+UNICODE_LINE = "Şişli Ğğ İı — Привет"
+
+# The no-font case: none of the Unicode TrueType candidates exists.
+NO_UNICODE_FONTS = {"sans": [], "serif": [], "mono": []}
+
+# The base-14 Latin fonts, as PyMuPDF names a text span drawn in one.
+BASE14_FONTS = {
+    "Helvetica", "Helvetica-Bold", "Helvetica-Oblique", "Helvetica-BoldOblique",
+    "Times-Roman", "Times-Bold", "Times-Italic", "Times-BoldItalic",
+    "Courier", "Courier-Bold", "Courier-Oblique", "Courier-BoldOblique",
+}
+
+
+def first_page_text_and_fonts(pdf_path: str) -> tuple[str, set, set]:
+    """The first page's text, the fonts its text is drawn in, and the font file types
+    in its font list ("ttf" for embedded TrueType, "n/a" for a base-14 font)."""
+    with fitz.open(pdf_path) as doc:
+        page = doc[0]
+        drawn_in = {
+            span["font"]
+            for block in page.get_text("dict")["blocks"]
+            for line in block.get("lines", [])
+            for span in line["spans"]
+        }
+        return page.get_text(), drawn_in, {ext for _, ext, *_ in page.get_fonts()}
 
 
 @pytest.fixture

@@ -1,8 +1,13 @@
 """Tests for PDF creation and reading tools."""
 
 import os
+from unittest.mock import patch
+
 import pytest
 from magic_pdf.tools.create import read_pdf, get_pdf_info, create_pdf_from_text
+from magic_pdf.tools.utils import _UNICODE_FONT_CANDIDATES
+
+from .conftest import BASE14_FONTS, NO_UNICODE_FONTS, UNICODE_LINE, first_page_text_and_fonts
 
 
 class TestReadPdf:
@@ -93,3 +98,24 @@ class TestCreatePdfFromText:
         create_pdf_from_text("Hello roundtrip test", output)
         text = read_pdf(output)
         assert "Hello roundtrip test" in text
+
+    @pytest.mark.parametrize(
+        "markdown_text",
+        [UNICODE_LINE, f"# {UNICODE_LINE}", f"**{UNICODE_LINE}**", f"*{UNICODE_LINE}*"],
+        ids=["plain", "heading", "bold", "italic"],
+    )
+    def test_turkish_and_cyrillic_read_back_as_written(self, tmp_path, markdown_text):
+        output = str(tmp_path / "unicode.pdf")
+        create_pdf_from_text(markdown_text, output)
+        text, drawn_in, file_types = first_page_text_and_fonts(output)
+        assert text.strip() == UNICODE_LINE
+        assert "ttf" in file_types and not drawn_in & BASE14_FONTS, (drawn_in, file_types)
+
+    def test_without_a_unicode_font_it_still_writes_in_helvetica(self, tmp_path, caplog):
+        output = str(tmp_path / "no_font.pdf")
+        with patch.dict(_UNICODE_FONT_CANDIDATES, NO_UNICODE_FONTS):
+            create_pdf_from_text("Hello fallback", output)
+        text, drawn_in, file_types = first_page_text_and_fonts(output)
+        assert text.strip() == "Hello fallback"
+        assert drawn_in == {"Helvetica"} and file_types == {"n/a"}
+        assert "No Unicode TrueType" in caplog.text
