@@ -165,6 +165,10 @@ def html_to_pdf(
 ) -> str:
     """Convert HTML to PDF. Accepts either a raw HTML string or a URL to fetch and convert.
 
+    This is not a web page capture: there is no browser, so a URL's raw HTML is
+    fetched without running JavaScript, and only limited CSS is supported. Use it
+    for HTML you write or simple static pages.
+
     Args:
         source: Raw HTML string or URL (http:// or https://)
         output_path: Absolute path for the output PDF file

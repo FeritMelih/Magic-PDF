@@ -4,6 +4,7 @@ import os
 from unittest.mock import patch
 
 import pytest
+from mcp.server.fastmcp.tools import Tool
 from magic_pdf.tools.convert import (
     _find_libreoffice,
     docx_to_pdf,
@@ -74,6 +75,13 @@ class TestHtmlToPdf:
         html = "<p>Simple paragraph</p>"
         result = html_to_pdf(html, output)
         assert os.path.isfile(output)
+
+    def test_description_says_it_is_not_a_web_page_capture(self):
+        # The description the MCP server sends is what a model reads before it
+        # plans page captures with this tool.
+        description = " ".join(Tool.from_function(html_to_pdf).description.split())
+        assert "not a web page capture" in description
+        assert "JavaScript" in description and "browser" in description
 
     @pytest.mark.parametrize(
         "html",
