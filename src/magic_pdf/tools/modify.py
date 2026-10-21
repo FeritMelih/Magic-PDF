@@ -157,14 +157,33 @@ def add_header_footer(
     return f"Added {' and '.join(parts)} to {total_pages} pages: {output_path}"
 
 
+_FILL_COLORS = {"black": (0, 0, 0), "white": (1, 1, 1)}
+
+
+def _parse_fill_color(fill_color: str) -> tuple:
+    """'black', 'white' or '#RRGGBB' as the RGB floats PyMuPDF takes."""
+    value = fill_color.strip().lower()
+    if value in _FILL_COLORS:
+        return _FILL_COLORS[value]
+    if re.fullmatch(r"#[0-9a-f]{6}", value):
+        return tuple(int(value[i:i + 2], 16) / 255 for i in (1, 3, 5))
+    raise ValueError(
+        f"fill_color must be 'black', 'white' or '#RRGGBB', not {fill_color!r}"
+    )
+
+
 def redact_pdf(
     file_path: str,
     search_text: str | None = None,
     use_regex: bool = False,
     areas: list[dict] | None = None,
     output_path: str | None = None,
+    fill_color: str = "black",
 ) -> str:
     """Redact content from a PDF. Supports text-based and area-based redaction.
+
+    The text under each redacted area is removed from the page, not just covered: it can
+    no longer be searched, copied or read out.
 
     Args:
         file_path: Absolute path to the PDF file
@@ -172,12 +191,16 @@ def redact_pdf(
         use_regex: Whether search_text is a regex pattern (default: False)
         areas: List of area dicts with keys: page (1-indexed), x, y, width, height (in points)
         output_path: Optional output path (default: same directory with suffix)
+        fill_color: What is painted where the content was: "black" (default) for a visible
+            redaction bar, "white" for a clean page (e.g. to remove old text before writing
+            new text in its place), or "#RRGGBB" to match a coloured background
     """
     validate_pdf_file(file_path)
     validate_file_size(file_path)
 
     if search_text is None and areas is None:
         raise ValueError("At least one of search_text or areas must be provided")
+    fill = _parse_fill_color(fill_color)
 
     if output_path is None:
         output_path = generate_output_path(file_path, "redacted")
@@ -201,12 +224,12 @@ def redact_pdf(
                     # Use page.search_for() to get precise bounding rects
                     rects = page.search_for(matched_text)
                     for rect in rects:
-                        page.add_redact_annot(rect, fill=(0, 0, 0))
+                        page.add_redact_annot(rect, fill=fill)
                         redaction_count += 1
             else:
                 instances = page.search_for(search_text)
                 for rect in instances:
-                    page.add_redact_annot(rect, fill=(0, 0, 0))
+                    page.add_redact_annot(rect, fill=fill)
                     redaction_count += 1
 
             page.apply_redactions()
@@ -227,7 +250,7 @@ def redact_pdf(
                 area["x"] + area["width"],
                 area["y"] + area["height"],
             )
-            page.add_redact_annot(rect, fill=(0, 0, 0))
+            page.add_redact_annot(rect, fill=fill)
             page.apply_redactions()
             redaction_count += 1
 

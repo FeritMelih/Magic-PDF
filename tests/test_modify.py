@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import fitz  # PyMuPDF
 import pytest
+from mcp.server.fastmcp.tools import Tool
 from magic_pdf.tools.modify import add_header_footer, redact_pdf
 from magic_pdf.tools.create import read_pdf, get_pdf_info
 from magic_pdf.tools.utils import _UNICODE_FONT_CANDIDATES
@@ -112,3 +113,86 @@ class TestRedactPdf:
         areas = [{"page": 99, "x": 0, "y": 0, "width": 100, "height": 100}]
         with pytest.raises(ValueError):
             redact_pdf(sample_pdf, areas=areas, output_path=output)
+
+    # ── fill colour ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def _first_hit(pdf_path, text):
+        with fitz.open(pdf_path) as doc:
+            return doc[0].search_for(text)[0]
+
+    @staticmethod
+    def _box(pdf_path, rect):
+        """The text left inside rect on page 1, and its rendered grey levels (0 = black)."""
+        with fitz.open(pdf_path) as doc:
+            page = doc[0]
+            pixels = page.get_pixmap(clip=rect, colorspace=fitz.csGRAY).samples
+            return page.get_text(clip=rect).strip(), pixels
+
+    @pytest.mark.parametrize(
+        "search_text, use_regex", [("Python", False), ("Pyth[o]n", True)]
+    )
+    def test_white_text_redaction_removes_the_text_and_draws_no_black(
+        self, sample_pdf_searchable, tmp_path, search_text, use_regex
+    ):
+        rect = self._first_hit(sample_pdf_searchable, "Python")
+        output = str(tmp_path / "white.pdf")
+        redact_pdf(
+            sample_pdf_searchable,
+            search_text=search_text,
+            use_regex=use_regex,
+            fill_color="white",
+            output_path=output,
+        )
+        assert "Python" not in read_pdf(output)
+        text, pixels = self._box(output, rect)
+        assert text == ""
+        assert min(pixels) == 255
+
+    def test_white_area_redaction_removes_the_text_and_draws_no_black(
+        self, sample_pdf_searchable, tmp_path
+    ):
+        rect = self._first_hit(sample_pdf_searchable, "quick brown")
+        areas = [{"page": 1, "x": rect.x0, "y": rect.y0,
+                  "width": rect.width, "height": rect.height}]
+        output = str(tmp_path / "white_area.pdf")
+        redact_pdf(sample_pdf_searchable, areas=areas, fill_color="white", output_path=output)
+        assert "quick brown" not in read_pdf(output)
+        text, pixels = self._box(output, rect)
+        assert text == ""
+        assert min(pixels) == 255
+
+    def test_default_fill_stays_black(self, sample_pdf_searchable, tmp_path):
+        rect = self._first_hit(sample_pdf_searchable, "Python")
+        output = str(tmp_path / "black.pdf")
+        redact_pdf(sample_pdf_searchable, search_text="Python", output_path=output)
+        text, pixels = self._box(output, rect)
+        assert text == ""
+        assert sum(pixels) / len(pixels) < 30
+
+    def test_hex_fill_colour(self, sample_pdf_searchable, tmp_path):
+        rect = self._first_hit(sample_pdf_searchable, "Python")
+        output = str(tmp_path / "hex.pdf")
+        redact_pdf(
+            sample_pdf_searchable, search_text="Python", fill_color="#FF0000", output_path=output
+        )
+        with fitz.open(output) as doc:
+            pix = doc[0].get_pixmap(clip=rect)
+            r, g, b = pix.pixel(pix.width // 2, pix.height // 2)
+        assert (r, g, b) == (255, 0, 0)
+
+    def test_unknown_fill_colour_is_refused(self, sample_pdf_searchable, tmp_path):
+        output = str(tmp_path / "bad_fill.pdf")
+        with pytest.raises(ValueError, match="fill_color"):
+            redact_pdf(
+                sample_pdf_searchable, search_text="Python", fill_color="grey", output_path=output
+            )
+        assert not os.path.exists(output)
+
+    def test_description_says_how_to_choose_the_fill_colour(self):
+        # The description the MCP server sends is what a model reads before it
+        # picks a fill for a re-lettering.
+        description = " ".join(Tool.from_function(redact_pdf).description.split())
+        assert "fill_color" in description
+        assert '"white" for a clean page' in description
+        assert "removed" in description and "not just covered" in description
