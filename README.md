@@ -4,7 +4,7 @@ An open-source MCP (Model Context Protocol) server for comprehensive PDF operati
 
 ## Features
 
-**23 tools** across 10 categories:
+**23 tools** across 11 categories:
 
 | Category | Tools |
 |---|---|
@@ -16,6 +16,7 @@ An open-source MCP (Model Context Protocol) server for comprehensive PDF operati
 | **Page Organization** | `add_pages`, `remove_pages`, `move_pages`, `separate_pages` |
 | **Compression** | `compress_pdf` (low / medium / high) |
 | **Search** | `search_pdf` (with context snippets) |
+| **Checking** | `check_pdf` (every page at once: near-blank pages, text, images, annotations by type, where a colour shows) |
 | **Forms** | `get_form_fields`, `fill_form`, `flatten_form` |
 | **Modification** | `add_header_footer`, `redact_pdf` |
 
@@ -136,6 +137,7 @@ magic-pdf/
 │           ├── manipulate.py   # Merge, split, organize tools
 │           ├── compress.py     # Compression tools
 │           ├── search.py       # Search tools
+│           ├── check.py        # Whole-file page check
 │           ├── modify.py       # Header/footer, redact tools
 │           ├── forms.py        # PDF form tools
 │           └── utils.py        # Shared utilities & validation

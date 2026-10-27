@@ -15,7 +15,7 @@ logging.basicConfig(
 mcp = FastMCP("Magic-PDF")
 
 # Register all tool modules
-from .tools import create, convert, manipulate, compress, search, modify, forms
+from .tools import create, convert, manipulate, compress, search, modify, forms, check
 
 create.register(mcp)
 convert.register(mcp)
@@ -24,6 +24,7 @@ compress.register(mcp)
 search.register(mcp)
 modify.register(mcp)
 forms.register(mcp)
+check.register(mcp)
 
 
 def main():
